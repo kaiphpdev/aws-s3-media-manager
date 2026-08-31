@@ -4,19 +4,27 @@ import FileCard from "./FileCard";
 function MediaGrid({
   folders,
   files,
+  selectedFiles,
   onOpenFolder,
   onOpenFile,
   onCopyUrl,
   onDeleteFile,
+  onToggleFileSelection,
 }) {
   return (
     <div className="media-grid">
       {folders.map(
         (folder) => (
           <FolderCard
-            key={folder.key}
-            folder={folder}
-            onOpen={onOpenFolder}
+            key={
+              folder.key
+            }
+            folder={
+              folder
+            }
+            onOpen={
+              onOpenFolder
+            }
           />
         )
       )}
@@ -24,8 +32,18 @@ function MediaGrid({
       {files.map(
         (file) => (
           <FileCard
-            key={file.key}
+            key={
+              file.key
+            }
             file={file}
+            selected={
+              selectedFiles.includes(
+                file.key
+              )
+            }
+            onToggleSelect={
+              onToggleFileSelection
+            }
             onOpen={
               onOpenFile
             }

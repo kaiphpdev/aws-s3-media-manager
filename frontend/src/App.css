@@ -1826,3 +1826,159 @@ button:disabled {
     width: auto;
   }
 }
+
+
+.media-card {
+  position: relative;
+}
+
+.media-card.selected {
+  border-color: #111827;
+
+  box-shadow:
+    0 0 0 2px
+    rgba(17, 24, 39, 0.08);
+}
+
+.file-select {
+  position: absolute;
+
+  top: 17px;
+  left: 17px;
+
+  z-index: 5;
+
+  width: 28px;
+  height: 28px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 7px;
+
+  background:
+    rgba(
+      255,
+      255,
+      255,
+      0.92
+    );
+
+  box-shadow:
+    0 2px 8px
+    rgba(0, 0, 0, 0.1);
+}
+
+.file-select input {
+  width: 16px;
+  height: 16px;
+
+  margin: 0;
+
+  accent-color: #111827;
+
+  cursor: pointer;
+}
+
+.bulk-actions {
+  min-height: 58px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 20px;
+
+  margin-bottom: 16px;
+
+  padding: 10px 14px;
+
+  border: 1px solid #d4d4d8;
+  border-radius: 10px;
+
+  background: #ffffff;
+
+  box-shadow:
+    0 4px 15px
+    rgba(15, 23, 42, 0.04);
+}
+
+.bulk-actions-left {
+  display: flex;
+  align-items: center;
+
+  gap: 5px;
+
+  font-size: 12px;
+}
+
+.bulk-actions-left strong {
+  color: #18181b;
+
+  font-size: 13px;
+}
+
+.bulk-actions-left span {
+  color: #71717a;
+}
+
+.bulk-actions-right {
+  display: flex;
+  align-items: center;
+
+  gap: 8px;
+}
+
+.bulk-button,
+.bulk-delete-button {
+  min-height: 36px;
+
+  padding: 0 13px;
+
+  border-radius: 8px;
+
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.bulk-button {
+  border: 1px solid #dedee3;
+
+  background: #ffffff;
+
+  color: #52525b;
+}
+
+.bulk-button:hover {
+  background: #f4f4f5;
+}
+
+.bulk-delete-button {
+  border: 1px solid #fecaca;
+
+  background: #fef2f2;
+
+  color: #dc2626;
+}
+
+.bulk-delete-button:hover {
+  background: #fee2e2;
+}
+
+@media (max-width: 650px) {
+  .bulk-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .bulk-actions-right {
+    width: 100%;
+
+    flex-wrap: wrap;
+  }
+
+  .bulk-actions-right button {
+    flex: 1;
+  }
+}

@@ -75,6 +75,12 @@ export default function useMediaManager() {
     useState("");
 
   const [
+    selectedFiles,
+    setSelectedFiles,
+  ] = useState([]);
+
+
+  const [
     previewLoading,
     setPreviewLoading,
   ] = useState(false);
@@ -146,22 +152,22 @@ export default function useMediaManager() {
 
       setFolders(
         response.data.folders ||
-          []
+        []
       );
 
       setFiles(
         response.data.files ||
-          []
+        []
       );
 
       setPagination(
         response.data.pagination ||
-          defaultPagination
+        defaultPagination
       );
 
       setCounts(
         response.data.counts ||
-          defaultCounts
+        defaultCounts
       );
 
       if (
@@ -169,7 +175,7 @@ export default function useMediaManager() {
           .pagination?.page &&
         response.data
           .pagination.page !==
-          page
+        page
       ) {
         setPage(
           response.data
@@ -185,7 +191,7 @@ export default function useMediaManager() {
       alert(
         error.response
           ?.data?.message ||
-          "Unable to load media"
+        "Unable to load media"
       );
     } finally {
       setLoading(false);
@@ -228,9 +234,9 @@ export default function useMediaManager() {
           (item) =>
             item.id === uploadId
               ? {
-                  ...item,
-                  ...values,
-                }
+                ...item,
+                ...values,
+              }
               : item
         )
     );
@@ -273,11 +279,11 @@ export default function useMediaManager() {
           const progress =
             total > 0
               ? Math.round(
-                  (
-                    progressEvent.loaded /
-                    total
-                  ) * 100
-                )
+                (
+                  progressEvent.loaded /
+                  total
+                ) * 100
+              )
               : 0;
 
           updateUpload(
@@ -387,7 +393,7 @@ export default function useMediaManager() {
     const selectedFiles =
       Array.from(
         event.target.files ||
-          []
+        []
       );
 
     if (!selectedFiles.length) {
@@ -439,7 +445,7 @@ export default function useMediaManager() {
       alert(
         error.response
           ?.data?.message ||
-          "Unable to create folder"
+        "Unable to create folder"
       );
     }
   }
@@ -507,7 +513,7 @@ export default function useMediaManager() {
 
     await openFile(
       files[
-        currentIndex - 1
+      currentIndex - 1
       ]
     );
   }
@@ -519,14 +525,14 @@ export default function useMediaManager() {
     if (
       currentIndex === -1 ||
       currentIndex >=
-        files.length - 1
+      files.length - 1
     ) {
       return;
     }
 
     await openFile(
       files[
-        currentIndex + 1
+      currentIndex + 1
       ]
     );
   }
@@ -606,6 +612,7 @@ export default function useMediaManager() {
 
   function openFolder(folder) {
     closePreview();
+    clearSelection();
 
     setPrefix(
       folder.key
@@ -622,6 +629,7 @@ export default function useMediaManager() {
     }
 
     closePreview();
+    clearSelection();
 
     const parts =
       prefix
@@ -643,6 +651,7 @@ export default function useMediaManager() {
 
   function goToRoot() {
     closePreview();
+    clearSelection();
 
     setPrefix("");
     setPage(1);
@@ -654,6 +663,7 @@ export default function useMediaManager() {
     newBucketId
   ) {
     closePreview();
+    clearSelection();
 
     setBucketId(
       newBucketId
@@ -678,7 +688,110 @@ export default function useMediaManager() {
   const hasNextPreview =
     previewIndex !== -1 &&
     previewIndex <
-      files.length - 1;
+    files.length - 1;
+
+
+
+  function isFileSelected(file) {
+    return selectedFiles.includes(
+      file.key
+    );
+  }
+
+  function toggleFileSelection(file) {
+    setSelectedFiles(
+      (current) => {
+        if (
+          current.includes(
+            file.key
+          )
+        ) {
+          return current.filter(
+            (key) =>
+              key !== file.key
+          );
+        }
+
+        return [
+          ...current,
+          file.key,
+        ];
+      }
+    );
+  }
+
+  function selectAllFiles() {
+    setSelectedFiles(
+      files.map(
+        (file) => file.key
+      )
+    );
+  }
+
+  function clearSelection() {
+    setSelectedFiles([]);
+  }
+
+  async function deleteSelectedFiles() {
+    if (
+      !selectedFiles.length
+    ) {
+      return;
+    }
+
+    const confirmed =
+      window.confirm(
+        `Delete ${selectedFiles.length} selected file${selectedFiles.length > 1
+          ? "s"
+          : ""
+        }?`
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await api.post(
+        "/media/delete-many",
+        {
+          bucketId,
+          keys:
+            selectedFiles,
+        }
+      );
+
+      if (
+        previewFile &&
+        selectedFiles.includes(
+          previewFile.key
+        )
+      ) {
+        closePreview();
+      }
+
+      setSelectedFiles([]);
+
+      await loadMedia();
+    } catch (error) {
+      console.error(
+        "BULK DELETE:",
+        error
+      );
+
+      alert(
+        error.response
+          ?.data?.message ||
+        "Unable to delete selected files"
+      );
+    }
+  }
+  function changePage(
+    newPage
+  ) {
+    setSelectedFiles([]);
+    setPage(newPage);
+  }
 
   return {
     buckets,
@@ -732,5 +845,15 @@ export default function useMediaManager() {
     changeBucket,
 
     loadMedia,
+
+
+    selectedFiles,
+    isFileSelected,
+    toggleFileSelection,
+    selectAllFiles,
+    clearSelection,
+    deleteSelectedFiles,
+    changePage,
+
   };
 }

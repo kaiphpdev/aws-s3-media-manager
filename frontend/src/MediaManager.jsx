@@ -12,7 +12,7 @@ import EmptyState from "./components/media/EmptyState";
 import PreviewModal from "./components/media/PreviewModal";
 import UploadDropzone from "./components/media/UploadDropzone";
 import UploadProgress from "./components/media/UploadProgress";
-
+import BulkActions from "./components/media/BulkActions";
 import useMediaManager from "./hooks/useMediaManager";
 
 function MediaManager({
@@ -71,6 +71,17 @@ function MediaManager({
     goBack,
     goToRoot,
     changeBucket,
+
+    
+
+    selectedFiles,
+    isFileSelected,
+    toggleFileSelection,
+    selectAllFiles,
+    clearSelection,
+    deleteSelectedFiles,
+    changePage,
+    
   } = useMediaManager();
 
   const currentBucket =
@@ -188,7 +199,7 @@ function MediaManager({
           />
 
           {loading ||
-          isEmpty ? (
+            isEmpty ? (
             <EmptyState
               loading={loading}
               search={search}
@@ -198,11 +209,31 @@ function MediaManager({
             />
           ) : (
             <>
-              <MediaGrid
-                folders={
-                  folders
+
+              <BulkActions
+                selectedCount={
+                  selectedFiles.length
                 }
+                totalFiles={
+                  files.length
+                }
+                onSelectAll={
+                  selectAllFiles
+                }
+                onClear={
+                  clearSelection
+                }
+                onDelete={
+                  deleteSelectedFiles
+                }
+              />
+
+              <MediaGrid
+                folders={folders}
                 files={files}
+                selectedFiles={
+                  selectedFiles
+                }
                 onOpenFolder={
                   openFolder
                 }
@@ -215,6 +246,9 @@ function MediaManager({
                 onDeleteFile={
                   deleteFile
                 }
+                onToggleFileSelection={
+                  toggleFileSelection
+                }
               />
 
               <Pagination
@@ -222,7 +256,7 @@ function MediaManager({
                   pagination
                 }
                 onPageChange={
-                  setPage
+                  changePage
                 }
               />
             </>
