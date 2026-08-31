@@ -3,6 +3,7 @@ import {
   useState,
 } from "react";
 
+import axios from "axios";
 import api from "../api";
 
 const defaultPagination = {
@@ -46,13 +47,14 @@ export default function useMediaManager() {
   const [uploading, setUploading] =
     useState(false);
 
+  const [uploads, setUploads] =
+    useState([]);
+
   const [search, setSearch] =
     useState("");
 
-  const [
-    searchInput,
-    setSearchInput,
-  ] = useState("");
+  const [searchInput, setSearchInput] =
+    useState("");
 
   const [page, setPage] =
     useState(1);
@@ -60,15 +62,22 @@ export default function useMediaManager() {
   const [limit, setLimit] =
     useState(50);
 
-  const [
-    pagination,
-    setPagination,
-  ] = useState(
-    defaultPagination
-  );
+  const [pagination, setPagination] =
+    useState(defaultPagination);
 
   const [counts, setCounts] =
     useState(defaultCounts);
+
+  const [previewFile, setPreviewFile] =
+    useState(null);
+
+  const [previewUrl, setPreviewUrl] =
+    useState("");
+
+  const [
+    previewLoading,
+    setPreviewLoading,
+  ] = useState(false);
 
   useEffect(() => {
     loadBuckets();
@@ -94,8 +103,8 @@ export default function useMediaManager() {
         );
 
       const list =
-        response.data
-          .buckets || [];
+        response.data.buckets ||
+        [];
 
       setBuckets(list);
 
@@ -113,6 +122,10 @@ export default function useMediaManager() {
   }
 
   async function loadMedia() {
+    if (!bucketId) {
+      return;
+    }
+
     try {
       setLoading(true);
 
@@ -132,24 +145,22 @@ export default function useMediaManager() {
         );
 
       setFolders(
-        response.data
-          .folders || []
+        response.data.folders ||
+          []
       );
 
       setFiles(
-        response.data
-          .files || []
+        response.data.files ||
+          []
       );
 
       setPagination(
-        response.data
-          .pagination ||
+        response.data.pagination ||
           defaultPagination
       );
 
       setCounts(
-        response.data
-          .counts ||
+        response.data.counts ||
           defaultCounts
       );
 
@@ -185,6 +196,7 @@ export default function useMediaManager() {
     event.preventDefault();
 
     setPage(1);
+
     setSearch(
       searchInput.trim()
     );
@@ -206,39 +218,166 @@ export default function useMediaManager() {
     setPage(1);
   }
 
-  async function uploadFile(file) {
+  function updateUpload(
+    uploadId,
+    values
+  ) {
+    setUploads(
+      (current) =>
+        current.map(
+          (item) =>
+            item.id === uploadId
+              ? {
+                  ...item,
+                  ...values,
+                }
+              : item
+        )
+    );
+  }
+
+  async function uploadFile(
+    file,
+    uploadId
+  ) {
     const response =
       await api.post(
         "/media/upload-url",
         {
           bucketId,
           prefix,
-          fileName:
-            file.name,
+          fileName: file.name,
           contentType:
             file.type ||
             "application/octet-stream",
         }
       );
 
-    const uploadResponse =
-      await fetch(
-        response.data.uploadUrl,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type":
-              file.type ||
-              "application/octet-stream",
-          },
-          body: file,
-        }
+    await axios.put(
+      response.data.uploadUrl,
+      file,
+      {
+        headers: {
+          "Content-Type":
+            file.type ||
+            "application/octet-stream",
+        },
+
+        onUploadProgress: (
+          progressEvent
+        ) => {
+          const total =
+            progressEvent.total ||
+            file.size;
+
+          const progress =
+            total > 0
+              ? Math.round(
+                  (
+                    progressEvent.loaded /
+                    total
+                  ) * 100
+                )
+              : 0;
+
+          updateUpload(
+            uploadId,
+            {
+              progress,
+            }
+          );
+        },
+      }
+    );
+  }
+
+  async function uploadFiles(
+    selectedFiles
+  ) {
+    const filesToUpload =
+      Array.from(
+        selectedFiles || []
       );
 
-    if (!uploadResponse.ok) {
-      throw new Error(
-        `Unable to upload ${file.name}`
+    if (!filesToUpload.length) {
+      return;
+    }
+
+    if (!bucketId) {
+      alert(
+        "Please select a bucket"
       );
+
+      return;
+    }
+
+    const batchId =
+      Date.now();
+
+    const newUploads =
+      filesToUpload.map(
+        (file, index) => ({
+          id: `${batchId}-${index}-${file.name}`,
+          name: file.name,
+          size: file.size,
+          progress: 0,
+          status: "pending",
+          file,
+        })
+      );
+
+    setUploads(newUploads);
+    setUploading(true);
+
+    for (
+      const upload of
+      newUploads
+    ) {
+      try {
+        updateUpload(
+          upload.id,
+          {
+            status:
+              "uploading",
+          }
+        );
+
+        await uploadFile(
+          upload.file,
+          upload.id
+        );
+
+        updateUpload(
+          upload.id,
+          {
+            progress: 100,
+            status:
+              "completed",
+          }
+        );
+      } catch (error) {
+        console.error(
+          "UPLOAD ERROR:",
+          upload.name,
+          error
+        );
+
+        updateUpload(
+          upload.id,
+          {
+            status:
+              "failed",
+          }
+        );
+      }
+    }
+
+    setUploading(false);
+
+    if (page !== 1) {
+      setPage(1);
+    } else {
+      await loadMedia();
     }
   }
 
@@ -247,36 +386,27 @@ export default function useMediaManager() {
   ) {
     const selectedFiles =
       Array.from(
-        event.target.files
+        event.target.files ||
+          []
       );
 
     if (!selectedFiles.length) {
       return;
     }
 
-    try {
-      setUploading(true);
+    await uploadFiles(
+      selectedFiles
+    );
 
-      for (
-        const file of
-        selectedFiles
-      ) {
-        await uploadFile(file);
-      }
+    event.target.value = "";
+  }
 
-      if (page === 1) {
-        await loadMedia();
-      } else {
-        setPage(1);
-      }
-    } catch (error) {
-      alert(
-        error.message ||
-          "Upload failed"
-      );
-    } finally {
-      setUploading(false);
+  function clearUploads() {
+    if (uploading) {
+      return;
     }
+
+    setUploads([]);
   }
 
   async function createFolder() {
@@ -295,7 +425,8 @@ export default function useMediaManager() {
         {
           bucketId,
           prefix,
-          folderName,
+          folderName:
+            folderName.trim(),
         }
       );
 
@@ -315,25 +446,89 @@ export default function useMediaManager() {
 
   async function openFile(file) {
     try {
+      setPreviewFile(file);
+      setPreviewUrl("");
+      setPreviewLoading(true);
+
       const response =
         await api.post(
           "/media/preview-url",
           {
             bucketId,
-            key:
-              file.key,
+            key: file.key,
           }
         );
 
-      window.open(
-        response.data.url,
-        "_blank"
+      setPreviewUrl(
+        response.data.url
       );
-    } catch {
+    } catch (error) {
+      console.error(
+        "PREVIEW ERROR:",
+        error
+      );
+
       alert(
-        "Unable to open file"
+        "Unable to preview file"
       );
+
+      setPreviewFile(null);
+      setPreviewUrl("");
+    } finally {
+      setPreviewLoading(false);
     }
+  }
+
+  function closePreview() {
+    setPreviewFile(null);
+    setPreviewUrl("");
+    setPreviewLoading(false);
+  }
+
+  function getPreviewIndex() {
+    if (!previewFile) {
+      return -1;
+    }
+
+    return files.findIndex(
+      (file) =>
+        file.key ===
+        previewFile.key
+    );
+  }
+
+  async function previewPrevious() {
+    const currentIndex =
+      getPreviewIndex();
+
+    if (currentIndex <= 0) {
+      return;
+    }
+
+    await openFile(
+      files[
+        currentIndex - 1
+      ]
+    );
+  }
+
+  async function previewNext() {
+    const currentIndex =
+      getPreviewIndex();
+
+    if (
+      currentIndex === -1 ||
+      currentIndex >=
+        files.length - 1
+    ) {
+      return;
+    }
+
+    await openFile(
+      files[
+        currentIndex + 1
+      ]
+    );
   }
 
   async function copyUrl(file) {
@@ -343,8 +538,7 @@ export default function useMediaManager() {
           "/media/preview-url",
           {
             bucketId,
-            key:
-              file.key,
+            key: file.key,
           }
         );
 
@@ -354,8 +548,15 @@ export default function useMediaManager() {
           response.data.url
         );
 
-      alert("URL copied");
-    } catch {
+      alert(
+        "URL copied"
+      );
+    } catch (error) {
+      console.error(
+        "COPY URL:",
+        error
+      );
+
       alert(
         "Unable to copy URL"
       );
@@ -378,14 +579,25 @@ export default function useMediaManager() {
         {
           data: {
             bucketId,
-            key:
-              file.key,
+            key: file.key,
           },
         }
       );
 
+      if (
+        previewFile?.key ===
+        file.key
+      ) {
+        closePreview();
+      }
+
       await loadMedia();
-    } catch {
+    } catch (error) {
+      console.error(
+        "DELETE FILE:",
+        error
+      );
+
       alert(
         "Unable to delete file"
       );
@@ -393,7 +605,12 @@ export default function useMediaManager() {
   }
 
   function openFolder(folder) {
-    setPrefix(folder.key);
+    closePreview();
+
+    setPrefix(
+      folder.key
+    );
+
     setPage(1);
     setSearch("");
     setSearchInput("");
@@ -403,6 +620,8 @@ export default function useMediaManager() {
     if (!prefix) {
       return;
     }
+
+    closePreview();
 
     const parts =
       prefix
@@ -423,6 +642,8 @@ export default function useMediaManager() {
   }
 
   function goToRoot() {
+    closePreview();
+
     setPrefix("");
     setPage(1);
     setSearch("");
@@ -432,6 +653,8 @@ export default function useMediaManager() {
   function changeBucket(
     newBucketId
   ) {
+    closePreview();
+
     setBucketId(
       newBucketId
     );
@@ -440,7 +663,22 @@ export default function useMediaManager() {
     setPage(1);
     setSearch("");
     setSearchInput("");
+
+    if (!uploading) {
+      setUploads([]);
+    }
   }
+
+  const previewIndex =
+    getPreviewIndex();
+
+  const hasPreviousPreview =
+    previewIndex > 0;
+
+  const hasNextPreview =
+    previewIndex !== -1 &&
+    previewIndex <
+      files.length - 1;
 
   return {
     buckets,
@@ -448,27 +686,51 @@ export default function useMediaManager() {
     prefix,
     folders,
     files,
+
     loading,
     uploading,
+    uploads,
+
     search,
     searchInput,
+
     page,
     limit,
     pagination,
     counts,
+
+    previewFile,
+    previewUrl,
+    previewLoading,
+    hasPreviousPreview,
+    hasNextPreview,
+
     setSearchInput,
     setPage,
+
     submitSearch,
     clearSearch,
     changeLimit,
+
     handleUpload,
+    uploadFiles,
+    clearUploads,
+
     createFolder,
+
     openFile,
+    closePreview,
+    previewPrevious,
+    previewNext,
+
     copyUrl,
     deleteFile,
+
     openFolder,
     goBack,
     goToRoot,
     changeBucket,
+
+    loadMedia,
   };
 }

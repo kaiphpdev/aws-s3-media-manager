@@ -21,7 +21,9 @@ function Topbar({
         type="button"
         className="primary-button"
         onClick={() =>
-          fileInputRef.current?.click()
+          fileInputRef
+            .current
+            ?.click()
         }
         disabled={uploading}
       >
@@ -35,6 +37,7 @@ function Topbar({
         type="file"
         multiple
         hidden
+        disabled={uploading}
         onChange={onUpload}
       />
     </header>

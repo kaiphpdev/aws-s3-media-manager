@@ -5,26 +5,25 @@ import {
 
 function FileCard({
   file,
-  onPreview,
+  onOpen,
   onCopyUrl,
   onDelete,
 }) {
   return (
     <article className="media-card">
-      <div className="card-preview file-preview">
+      <div
+        className="card-preview file-preview"
+        onClick={() =>
+          onOpen(file)
+        }
+      >
         <span>
           {getFileIcon(file.name)}
         </span>
 
-        <button
-          type="button"
-          className="preview-card-button"
-          onClick={() =>
-            onPreview(file)
-          }
-        >
+        <div className="preview-overlay">
           Preview
-        </button>
+        </div>
       </div>
 
       <div className="card-info">
@@ -43,7 +42,7 @@ function FileCard({
         <button
           type="button"
           onClick={() =>
-            onPreview(file)
+            onOpen(file)
           }
         >
           Preview

@@ -5,7 +5,7 @@ function MediaGrid({
   folders,
   files,
   onOpenFolder,
-  onPreviewFile,
+  onOpenFile,
   onCopyUrl,
   onDeleteFile,
 }) {
@@ -26,8 +26,8 @@ function MediaGrid({
           <FileCard
             key={file.key}
             file={file}
-            onPreview={
-              onPreviewFile
+            onOpen={
+              onOpenFile
             }
             onCopyUrl={
               onCopyUrl
