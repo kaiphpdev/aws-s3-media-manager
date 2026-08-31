@@ -80,6 +80,21 @@ export default function useMediaManager() {
   ] = useState([]);
 
 
+
+  const [
+    moveCopyModal,
+    setMoveCopyModal,
+  ] = useState({
+    open: false,
+    mode: null,
+  });
+
+  const [
+    moveCopyLoading,
+    setMoveCopyLoading,
+  ] = useState(false);
+
+
   const [
     previewLoading,
     setPreviewLoading,
@@ -847,6 +862,137 @@ export default function useMediaManager() {
     setPage(newPage);
   }
 
+
+
+
+  function openMoveModal() {
+    if (!selectedFiles.length) {
+      return;
+    }
+
+    setMoveCopyModal({
+      open: true,
+      mode: "move",
+    });
+  }
+
+  function openCopyModal() {
+    if (!selectedFiles.length) {
+      return;
+    }
+
+    setMoveCopyModal({
+      open: true,
+      mode: "copy",
+    });
+  }
+
+  function closeMoveCopyModal() {
+    if (moveCopyLoading) {
+      return;
+    }
+
+    setMoveCopyModal({
+      open: false,
+      mode: null,
+    });
+  }
+
+  async function submitMoveCopy({
+    destinationPrefix,
+    overwrite,
+  }) {
+    if (!selectedFiles.length) {
+      return;
+    }
+
+    try {
+      setMoveCopyLoading(true);
+
+      const mode =
+        moveCopyModal.mode;
+
+      const endpoint =
+        mode === "move"
+          ? "/media/move-many"
+          : "/media/copy-many";
+
+      const response =
+        await api.post(
+          endpoint,
+          {
+            bucketId,
+            keys:
+              selectedFiles,
+            destinationPrefix,
+            overwrite,
+          }
+        );
+
+      const successCount =
+        mode === "move"
+          ? response.data
+            .moved
+          : response.data
+            .copied;
+
+      const skipped =
+        response.data
+          .skipped || 0;
+
+      const failed =
+        response.data
+          .failed || 0;
+
+      const action =
+        mode === "move"
+          ? "moved"
+          : "copied";
+
+      let message =
+        `${successCount} file${successCount === 1
+          ? ""
+          : "s"
+        } ${action}`;
+
+      if (skipped) {
+        message +=
+          `, ${skipped} skipped`;
+      }
+
+      if (failed) {
+        message +=
+          `, ${failed} failed`;
+      }
+
+      alert(message);
+
+      setSelectedFiles([]);
+
+      setMoveCopyModal({
+        open: false,
+        mode: null,
+      });
+
+      await loadMedia();
+    } catch (error) {
+      console.error(
+        "MOVE COPY ERROR:",
+        error
+      );
+
+      alert(
+        error.response
+          ?.data?.message ||
+        "Unable to complete operation"
+      );
+    } finally {
+      setMoveCopyLoading(
+        false
+      );
+    }
+  }
+
   return {
     buckets,
     bucketId,
@@ -908,6 +1054,14 @@ export default function useMediaManager() {
     clearSelection,
     deleteSelectedFiles,
     changePage,
+
+    moveCopyModal,
+    moveCopyLoading,
+
+    openMoveModal,
+    openCopyModal,
+    closeMoveCopyModal,
+    submitMoveCopy,
 
   };
 }

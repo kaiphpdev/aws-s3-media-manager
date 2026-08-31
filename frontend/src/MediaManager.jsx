@@ -14,6 +14,8 @@ import UploadDropzone from "./components/media/UploadDropzone";
 import UploadProgress from "./components/media/UploadProgress";
 import BulkActions from "./components/media/BulkActions";
 import useMediaManager from "./hooks/useMediaManager";
+import MoveCopyModal from "./components/media/MoveCopyModal";
+
 
 function MediaManager({
   onLogout,
@@ -72,7 +74,7 @@ function MediaManager({
     goToRoot,
     changeBucket,
 
-    
+
 
     selectedFiles,
     isFileSelected,
@@ -81,7 +83,16 @@ function MediaManager({
     clearSelection,
     deleteSelectedFiles,
     changePage,
-    
+
+    moveCopyModal,
+    moveCopyLoading,
+
+    openMoveModal,
+    openCopyModal,
+    closeMoveCopyModal,
+    submitMoveCopy,
+
+
   } = useMediaManager();
 
   const currentBucket =
@@ -223,6 +234,12 @@ function MediaManager({
                 onClear={
                   clearSelection
                 }
+                onCopy={
+                  openCopyModal
+                }
+                onMove={
+                  openMoveModal
+                }
                 onDelete={
                   deleteSelectedFiles
                 }
@@ -271,6 +288,35 @@ function MediaManager({
           clearUploads
         }
       />
+
+
+      <MoveCopyModal
+        open={
+          moveCopyModal.open
+        }
+        mode={
+          moveCopyModal.mode
+        }
+        bucketId={
+          bucketId
+        }
+        selectedCount={
+          selectedFiles.length
+        }
+        currentPrefix={
+          prefix
+        }
+        loading={
+          moveCopyLoading
+        }
+        onClose={
+          closeMoveCopyModal
+        }
+        onSubmit={
+          submitMoveCopy
+        }
+      />
+
 
       <PreviewModal
         file={previewFile}

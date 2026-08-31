@@ -3,11 +3,11 @@ function BulkActions({
   totalFiles,
   onSelectAll,
   onClear,
+  onMove,
+  onCopy,
   onDelete,
 }) {
-  if (
-    !selectedCount
-  ) {
+  if (!selectedCount) {
     return null;
   }
 
@@ -46,9 +46,23 @@ function BulkActions({
         <button
           type="button"
           className="bulk-button"
-          onClick={
-            onClear
-          }
+          onClick={onCopy}
+        >
+          Copy to
+        </button>
+
+        <button
+          type="button"
+          className="bulk-button"
+          onClick={onMove}
+        >
+          Move to
+        </button>
+
+        <button
+          type="button"
+          className="bulk-button"
+          onClick={onClear}
         >
           Clear
         </button>
@@ -56,11 +70,9 @@ function BulkActions({
         <button
           type="button"
           className="bulk-delete-button"
-          onClick={
-            onDelete
-          }
+          onClick={onDelete}
         >
-          Delete selected
+          Delete
         </button>
       </div>
     </div>
