@@ -246,18 +246,63 @@ export default function useMediaManager() {
     file,
     uploadId
   ) {
-    const response =
+    let overwrite = false;
+
+    let response =
       await api.post(
         "/media/upload-url",
         {
           bucketId,
           prefix,
-          fileName: file.name,
+          fileName:
+            file.name,
           contentType:
             file.type ||
             "application/octet-stream",
+          overwrite,
         }
       );
+
+    if (
+      response.data
+        .requiresOverwrite
+    ) {
+      const shouldOverwrite =
+        window.confirm(
+          `"${file.name}" already exists.\n\nDo you want to overwrite it?`
+        );
+
+      if (!shouldOverwrite) {
+        updateUpload(
+          uploadId,
+          {
+            status: "skipped",
+            progress: 0,
+          }
+        );
+
+        return {
+          skipped: true,
+        };
+      }
+
+      overwrite = true;
+
+      response =
+        await api.post(
+          "/media/upload-url",
+          {
+            bucketId,
+            prefix,
+            fileName:
+              file.name,
+            contentType:
+              file.type ||
+              "application/octet-stream",
+            overwrite,
+          }
+        );
+    }
 
     await axios.put(
       response.data.uploadUrl,
@@ -295,6 +340,10 @@ export default function useMediaManager() {
         },
       }
     );
+
+    return {
+      skipped: false,
+    };
   }
 
   async function uploadFiles(
@@ -348,10 +397,15 @@ export default function useMediaManager() {
           }
         );
 
-        await uploadFile(
-          upload.file,
-          upload.id
-        );
+        const result =
+          await uploadFile(
+            upload.file,
+            upload.id
+          );
+
+        if (result?.skipped) {
+          continue;
+        }
 
         updateUpload(
           upload.id,
