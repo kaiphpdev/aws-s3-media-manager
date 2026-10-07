@@ -4,7 +4,9 @@ import {
   GetObjectCommand,
   PutObjectCommand,
   DeleteObjectCommand,
+  DeleteObjectsCommand,
   CopyObjectCommand,
+  HeadObjectCommand,
 } from "@aws-sdk/client-s3";
 
 import {
@@ -265,6 +267,31 @@ export async function deleteFile({
   );
 }
 
+export async function deleteFiles({
+  bucket,
+  region,
+  keys,
+}) {
+  const s3 = getS3Client(region);
+
+  if (!keys?.length) {
+    return null;
+  }
+
+  return s3.send(
+    new DeleteObjectsCommand({
+      Bucket: bucket,
+      Delete: {
+        Objects: keys.map((key) => ({
+          Key: key,
+        })),
+        Quiet: true,
+      },
+    })
+  );
+}
+
+
 /*
 |--------------------------------------------------------------------------
 | Rename / Move
@@ -302,4 +329,260 @@ export async function moveFile({
   );
 
   return true;
+}
+
+/*
+|--------------------------------------------------------------------------
+| File/Object Exists Or Not
+|--------------------------------------------------------------------------
+*/
+
+
+export async function objectExists({
+  bucket,
+  region,
+  key,
+}) {
+  const s3 = getS3Client(region);
+
+  try {
+    await s3.send(
+      new HeadObjectCommand({
+        Bucket: bucket,
+        Key: key,
+      })
+    );
+
+    return true;
+  } catch (error) {
+    if (
+      error?.$metadata?.httpStatusCode === 404 ||
+      error?.name === "NotFound"
+    ) {
+      return false;
+    }
+
+    throw error;
+  }
+}
+
+
+function getCopySource(
+  bucket,
+  key
+) {
+  const encodedKey =
+    key
+      .split("/")
+      .map((part) =>
+        encodeURIComponent(part)
+      )
+      .join("/");
+
+  return `${bucket}/${encodedKey}`;
+}
+
+export async function copyFiles({
+  bucket,
+  region,
+  keys,
+  destinationPrefix = "",
+  overwrite = false,
+}) {
+  const s3 =
+    getS3Client(region);
+
+  const normalizedPrefix =
+    destinationPrefix &&
+    !destinationPrefix.endsWith("/")
+      ? `${destinationPrefix}/`
+      : destinationPrefix;
+
+  const copied = [];
+  const skipped = [];
+  const failed = [];
+
+  for (const sourceKey of keys) {
+    const fileName =
+      sourceKey
+        .split("/")
+        .pop();
+
+    const destinationKey =
+      `${normalizedPrefix}${fileName}`;
+
+    if (
+      sourceKey ===
+      destinationKey
+    ) {
+      skipped.push({
+        key: sourceKey,
+        reason:
+          "Source and destination are the same",
+      });
+
+      continue;
+    }
+
+    try {
+      if (!overwrite) {
+        const exists =
+          await objectExists({
+            bucket,
+            region,
+            key:
+              destinationKey,
+          });
+
+        if (exists) {
+          skipped.push({
+            key: sourceKey,
+            destinationKey,
+            reason:
+              "Destination already exists",
+          });
+
+          continue;
+        }
+      }
+
+      await s3.send(
+        new CopyObjectCommand({
+          Bucket: bucket,
+          CopySource:
+            getCopySource(
+              bucket,
+              sourceKey
+            ),
+          Key:
+            destinationKey,
+        })
+      );
+
+      copied.push({
+        sourceKey,
+        destinationKey,
+      });
+    } catch (error) {
+      failed.push({
+        key:
+          sourceKey,
+        message:
+          error.message,
+      });
+    }
+  }
+
+  return {
+    copied,
+    skipped,
+    failed,
+  };
+}
+
+export async function moveFiles({
+  bucket,
+  region,
+  keys,
+  destinationPrefix = "",
+  overwrite = false,
+}) {
+  const s3 =
+    getS3Client(region);
+
+  const normalizedPrefix =
+    destinationPrefix &&
+    !destinationPrefix.endsWith("/")
+      ? `${destinationPrefix}/`
+      : destinationPrefix;
+
+  const moved = [];
+  const skipped = [];
+  const failed = [];
+
+  for (const sourceKey of keys) {
+    const fileName =
+      sourceKey
+        .split("/")
+        .pop();
+
+    const destinationKey =
+      `${normalizedPrefix}${fileName}`;
+
+    if (
+      sourceKey ===
+      destinationKey
+    ) {
+      skipped.push({
+        key: sourceKey,
+        reason:
+          "Source and destination are the same",
+      });
+
+      continue;
+    }
+
+    try {
+      if (!overwrite) {
+        const exists =
+          await objectExists({
+            bucket,
+            region,
+            key:
+              destinationKey,
+          });
+
+        if (exists) {
+          skipped.push({
+            key:
+              sourceKey,
+            destinationKey,
+            reason:
+              "Destination already exists",
+          });
+
+          continue;
+        }
+      }
+
+      await s3.send(
+        new CopyObjectCommand({
+          Bucket: bucket,
+          CopySource:
+            getCopySource(
+              bucket,
+              sourceKey
+            ),
+          Key:
+            destinationKey,
+        })
+      );
+
+      await s3.send(
+        new DeleteObjectCommand({
+          Bucket: bucket,
+          Key:
+            sourceKey,
+        })
+      );
+
+      moved.push({
+        sourceKey,
+        destinationKey,
+      });
+    } catch (error) {
+      failed.push({
+        key:
+          sourceKey,
+        message:
+          error.message,
+      });
+    }
+  }
+
+  return {
+    moved,
+    skipped,
+    failed,
+  };
 }

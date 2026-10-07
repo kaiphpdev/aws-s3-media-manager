@@ -11,7 +11,8 @@ const app = express();
 
 const PORT = process.env.PORT || 5000;
 
-console.log(process.env.FRONTEND_URL);
+console.log('FRONTEND_URL >> ', process.env.FRONTEND_URL);
+
 app.use(
   cors({
     origin: process.env.FRONTEND_URL,

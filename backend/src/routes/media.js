@@ -11,7 +11,11 @@ import {
   createUploadUrl,
   createFolder,
   deleteFile,
+  deleteFiles,
   moveFile,
+  objectExists,
+  copyFiles,
+  moveFiles,
 } from "../services/s3.js";
 
 const router =
@@ -26,13 +30,17 @@ const router =
 router.get(
   "/buckets",
   async (req, res) => {
+    
     const result =
       Object.values(
         buckets
-      ).map((item) => ({
-        id: item.id,
-        label: item.label,
-      }));
+      ).map((item) => {
+        console.log(item)
+        return {
+        id: item,
+        label: item,
+      }
+      });
 
     return res.json({
       success: true,
@@ -553,6 +561,7 @@ router.post(
         prefix = "",
         fileName,
         contentType,
+        overwrite = false,
       } = req.body;
 
       if (
@@ -569,13 +578,9 @@ router.post(
       }
 
       const bucketConfig =
-        getBucket(
-          bucketId
-        );
+        getBucket(bucketId);
 
-      if (
-        !bucketConfig
-      ) {
+      if (!bucketConfig) {
         return res
           .status(404)
           .json({
@@ -596,27 +601,56 @@ router.post(
             ""
           );
 
+      if (!safeFileName) {
+        return res
+          .status(400)
+          .json({
+            success: false,
+            message:
+              "Invalid file name",
+          });
+      }
+
       const normalizedPrefix =
         prefix &&
-        !prefix.endsWith(
-          "/"
-        )
+        !prefix.endsWith("/")
           ? `${prefix}/`
           : prefix;
 
       const key =
-        `${normalizedPrefix}${Date.now()}-${safeFileName}`;
+        `${normalizedPrefix}${safeFileName}`;
+
+      const exists =
+        await objectExists({
+          bucket:
+            bucketConfig.bucket,
+          region:
+            bucketConfig.region,
+          key,
+        });
+
+      if (
+        exists &&
+        !overwrite
+      ) {
+        return res.json({
+          success: true,
+          exists: true,
+          requiresOverwrite:
+            true,
+          key,
+          fileName:
+            safeFileName,
+        });
+      }
 
       const uploadUrl =
         await createUploadUrl({
           bucket:
             bucketConfig.bucket,
-
           region:
             bucketConfig.region,
-
           key,
-
           contentType:
             contentType ||
             "application/octet-stream",
@@ -624,9 +658,10 @@ router.post(
 
       return res.json({
         success: true,
-
+        exists,
+        requiresOverwrite:
+          false,
         uploadUrl,
-
         key,
       });
     } catch (error) {
@@ -639,17 +674,14 @@ router.post(
         .status(500)
         .json({
           success: false,
-
           message:
             "Unable to generate upload URL",
-
           error:
             error.message,
         });
     }
   }
 );
-
 /*
 |--------------------------------------------------------------------------
 | Create Folder
@@ -874,6 +906,86 @@ router.delete(
   }
 );
 
+router.post(
+  "/delete-many",
+  async (req, res) => {
+    try {
+      const {
+        bucketId,
+        keys,
+      } = req.body;
+
+      if (
+        !bucketId ||
+        !Array.isArray(keys) ||
+        !keys.length
+      ) {
+        return res
+          .status(400)
+          .json({
+            success: false,
+            message:
+              "bucketId and keys are required",
+          });
+      }
+
+      const bucketConfig =
+        getBucket(bucketId);
+
+      if (!bucketConfig) {
+        return res
+          .status(404)
+          .json({
+            success: false,
+            message:
+              "Bucket not found",
+          });
+      }
+
+      if (keys.length > 1000) {
+        return res
+          .status(400)
+          .json({
+            success: false,
+            message:
+              "Maximum 1000 files can be deleted at once",
+          });
+      }
+
+      await deleteFiles({
+        bucket:
+          bucketConfig.bucket,
+        region:
+          bucketConfig.region,
+        keys,
+      });
+
+      return res.json({
+        success: true,
+        deleted: keys.length,
+        message:
+          `${keys.length} files deleted successfully`,
+      });
+    } catch (error) {
+      console.error(
+        "BULK DELETE ERROR:",
+        error
+      );
+
+      return res
+        .status(500)
+        .json({
+          success: false,
+          message:
+            "Unable to delete selected files",
+          error:
+            error.message,
+        });
+    }
+  }
+);
+
+
 /*
 |--------------------------------------------------------------------------
 | Move / Rename
@@ -958,4 +1070,245 @@ router.post(
   }
 );
 
+router.get(
+  "/folders/:bucketId",
+  async (req, res) => {
+    try {
+      const bucketConfig =
+        getBucket(
+          req.params.bucketId
+        );
+
+      if (!bucketConfig) {
+        return res
+          .status(404)
+          .json({
+            success: false,
+            message:
+              "Bucket not found",
+          });
+      }
+
+      const prefix =
+        req.query.prefix ||
+        "";
+
+      const data =
+        await listAllMedia({
+          bucket:
+            bucketConfig.bucket,
+          region:
+            bucketConfig.region,
+          prefix,
+        });
+
+      const folders =
+        (
+          data.CommonPrefixes ||
+          []
+        )
+          .map((item) => ({
+            key:
+              item.Prefix,
+
+            name:
+              item.Prefix
+                .replace(
+                  prefix,
+                  ""
+                )
+                .replace(
+                  /\/$/,
+                  ""
+                ),
+          }))
+          .sort((a, b) =>
+            a.name.localeCompare(
+              b.name,
+              undefined,
+              {
+                numeric: true,
+                sensitivity:
+                  "base",
+              }
+            )
+          );
+
+      return res.json({
+        success: true,
+        prefix,
+        folders,
+      });
+    } catch (error) {
+      console.error(
+        "LOAD FOLDERS:",
+        error
+      );
+
+      return res
+        .status(500)
+        .json({
+          success: false,
+          message:
+            "Unable to load folders",
+        });
+    }
+  }
+);
+router.post(
+  "/copy-many",
+  async (req, res) => {
+    try {
+      const {
+        bucketId,
+        keys,
+        destinationPrefix = "",
+        overwrite = false,
+      } = req.body;
+
+      if (
+        !bucketId ||
+        !Array.isArray(keys) ||
+        !keys.length
+      ) {
+        return res
+          .status(400)
+          .json({
+            success: false,
+            message:
+              "bucketId and keys are required",
+          });
+      }
+
+      const bucketConfig =
+        getBucket(
+          bucketId
+        );
+
+      if (!bucketConfig) {
+        return res
+          .status(404)
+          .json({
+            success: false,
+            message:
+              "Bucket not found",
+          });
+      }
+
+      const result =
+        await copyFiles({
+          bucket:
+            bucketConfig.bucket,
+          region:
+            bucketConfig.region,
+          keys,
+          destinationPrefix,
+          overwrite:
+            Boolean(overwrite),
+        });
+
+      return res.json({
+        success: true,
+        copied:
+          result.copied.length,
+        skipped:
+          result.skipped.length,
+        failed:
+          result.failed.length,
+        result,
+      });
+    } catch (error) {
+      console.error(
+        "BULK COPY:",
+        error
+      );
+
+      return res
+        .status(500)
+        .json({
+          success: false,
+          message:
+            "Unable to copy selected files",
+        });
+    }
+  }
+);
+router.post(
+  "/move-many",
+  async (req, res) => {
+    try {
+      const {
+        bucketId,
+        keys,
+        destinationPrefix = "",
+        overwrite = false,
+      } = req.body;
+
+      if (
+        !bucketId ||
+        !Array.isArray(keys) ||
+        !keys.length
+      ) {
+        return res
+          .status(400)
+          .json({
+            success: false,
+            message:
+              "bucketId and keys are required",
+          });
+      }
+
+      const bucketConfig =
+        getBucket(
+          bucketId
+        );
+
+      if (!bucketConfig) {
+        return res
+          .status(404)
+          .json({
+            success: false,
+            message:
+              "Bucket not found",
+          });
+      }
+
+      const result =
+        await moveFiles({
+          bucket:
+            bucketConfig.bucket,
+          region:
+            bucketConfig.region,
+          keys,
+          destinationPrefix,
+          overwrite:
+            Boolean(overwrite),
+        });
+
+      return res.json({
+        success: true,
+        moved:
+          result.moved.length,
+        skipped:
+          result.skipped.length,
+        failed:
+          result.failed.length,
+        result,
+      });
+    } catch (error) {
+      console.error(
+        "BULK MOVE:",
+        error
+      );
+
+      return res
+        .status(500)
+        .json({
+          success: false,
+          message:
+            "Unable to move selected files",
+        });
+    }
+  }
+);
 export default router;

@@ -1,26 +1,15 @@
-export const buckets = {
-  bucketOne: {
-    id: "bucketOne",
-    label: "Media Bucket 1",
-    bucket: "your-first-bucket-name",
-    region: "ap-south-1",
-  },
-
-  bucketTwo: {
-    id: "bucketTwo",
-    label: "Media Bucket 2",
-    bucket: "your-second-bucket-name",
-    region: "ap-south-1",
-  },
-
-  bucketThree: {
-    id: "bucketThree",
-    label: "Media Bucket 3",
-    bucket: "your-third-bucket-name",
-    region: "ap-south-1",
-  },
-};
+export const buckets = JSON.parse(process.env.AWS_BUCKETS);
 
 export function getBucket(bucketId) {
-  return buckets[bucketId] || null;
+  const match = Object.entries(buckets).find(
+    ([key, value]) => value === bucketId
+  );
+
+  if (!match) return null;
+
+  return {
+    id: match[0],
+    bucket: match[1],
+    region: process.env.AWS_REGION,
+  };
 }
